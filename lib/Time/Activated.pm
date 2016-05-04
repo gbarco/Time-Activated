@@ -6,37 +6,22 @@ use 5.8.8;
 
 our $VERSION = '0.10';
 
-use strict;
-use warnings;
-
 use Exporter 5.57 'import';
-our @EXPORT = our @EXPORT_OK = qw(try catch finally);
+our @EXPORT = our @EXPORT_OK = qw(time_activated before after between always execute);
 
 use Carp;
 $Carp::Internal{+__PACKAGE__}++;
 
-BEGIN {
-  my $su = $INC{'Sub/Util.pm'} && defined &Sub::Util::set_subname;
-  my $sn = $INC{'Sub/Name.pm'} && eval { Sub::Name->VERSION(0.08) };
-  unless ($su || $sn) {
-    $su = eval { require Sub::Util; } && defined &Sub::Util::set_subname;
-    unless ($su) {
-      $sn = eval { require Sub::Name; Sub::Name->VERSION(0.08) };
-    }
-  }
-
-  *_subname = $su ? \&Sub::Util::set_subname
-            : $sn ? \&Sub::Name::subname
-            : sub { $_[1] };
-  *_HAS_SUBNAME = ($su || $sn) ? sub(){1} : sub(){0};
-}
+use Sub::Name 0.08;
+use DateTime;
+use DateTime::Format::ISO8601;
 
 # Need to prototype as @ not $$ because of the way Perl evaluates the prototype.
 # Keeping it at $$ means you only ever get 1 sub because we need to eval in a list
 # context & not a scalar one
 
-sub time_activated ($@) {
-  my ($time_activated, @code_refs) = @_;
+sub time_activated (@) {
+  my (@stanzas) = @_;
 
   # we need to save this here, the eval block will be in scalar context due
   # to $failed
@@ -44,25 +29,25 @@ sub time_activated ($@) {
 
   # find labeled blocks in the argument list.
   # catch and finally tag the blocks by blessing a scalar reference to them.
-  my $now = 'ISO8601datefornow';
-  foreach my $code_ref (@code_refs) {
-    if ( ref($code_ref) eq 'Time::Activated::Always') {
-      ${$code_ref}->{code}();
-    } elsif (ref($code_ref) eq 'Time::Activated::Before') {
-      if ($now < ${$code_ref}->{before}) {
-        ${$code_ref}->{code}();
+  my $now = DateTime->now();
+  foreach my $stanza (@stanzas) {
+    if ( ref($stanza) eq 'Time::Activated::Always') {
+      &{$stanza->{code}};
+    } elsif (ref($stanza) eq 'Time::Activated::Before') {
+      if ($now < $stanza->{before}) {
+       &{$stanza->{code}};
       }
-    } elsif (ref($code_ref) eq 'Time::Activated::After') {
-      if ($now > ${$code_ref}->{after}) {
-        ${$code_ref}->{code}();
+    } elsif (ref($stanza) eq 'Time::Activated::After') {
+      if ($now > $stanza->{after}) {
+        &{$stanza->{code}};
       }
-    } elsif (ref($code_ref) eq 'Time::Activated::Between') {
-      if ($now < ${$code_ref}->{before} && $now > ${$code_ref}->{after}) {
-        ${$code_ref}->{code}();
+    } elsif (ref($stanza) eq 'Time::Activated::Between') {
+      if ($now < $stanza->{before} && $now > ${$stanza}->{after}) {
+        &{$stanza->{code}};
       }
     } else {
       croak('time_activated() encountered an unexpected argument ('
-      . ( defined $code_ref ? $code_ref : 'undef' ) . ') - perhaps a missing semi-colon?');
+      . ( defined $stanza ? $stanza : 'undef' ) . ') - perhaps a missing semi-colon?');
     }
   }
 
@@ -72,61 +57,60 @@ sub time_activated ($@) {
   #  if _HAS_SUBNAME;
 
   # set up a scope guard to invoke the finally block at the end
-  my @guards =
-    map { Time::Activated::ScopeGuard->_new($_, $failed ? $error : ()) }
-    @finally;
+  # my @guards = map { Time::Activated::ScopeGuard->_new($_, $failed ? $error : ()) } @finally;
 
   # at this point $failed contains a true value if the eval died, even if some
   # destructor overwrote $@ as the eval was unwinding.
-  if ( $failed ) {
+  #if ( $failed ) {
     # if we got an error, invoke the catch block.
-    if ( $catch ) {
+   # if ( $catch ) {
       # This works like given($error), but is backwards compatible and
       # sets $_ in the dynamic scope for the body of C<$catch>
-      for ($error) {
-        return $catch->($error);
-      }
+    #  for ($error) {
+     #   return $catch->($error);
+     
+     # }
 
       # in case when() was used without an explicit return, the C<for>
       # loop will be aborted and there's no useful return value
-    }
+    #}
 
-    return;
-  } else {
-    # no failure, $@ is back to what it was, everything is fine
-    return $wantarray ? @ret : $ret[0];
-  }
+  #  return;
+  #} else {
+  #  # no failure, $@ is back to what it was, everything is fine
+  #  return $wantarray ? @ret : $ret[0];
+  #}
 }
 
-sub before ($&;@) {
+sub before ($$) {
   my ( $before, $block, @rest ) = @_;
 
   croak 'Useless bare before()' unless wantarray;
 
   my $caller = caller;
-  _subname("${caller}::catch {...} " => $block)
-    if _HAS_SUBNAME;
+  subname("${caller}::before {...} " => \&$block);
+
   return (
-    bless({before=>$before, code=>\$block}, 'Time::Activated::Before'),
+    bless({before=>$before, code=>\&$block}, 'Time::Activated::Before'),
     @rest,
   );
 }
 
-sub after ($&;@) {
+sub after ($$;) {
   my ( $after, $block, @rest ) = @_;
 
   croak 'Useless bare after()' unless wantarray;
 
   my $caller = caller;
-  _subname("${caller}::finally {...} " => $block)
-    if _HAS_SUBNAME;
+  subname("${caller}::after {...} " => \&$block);
+
   return (
-    bless({after=>$after, code=>\$block}, 'Time::Activated::After'),
+    bless({after=>_spawn_dt($after), code=>\&$block}, 'Time::Activated::After'),
     @rest,
   );
 }
 
-sub between ($$&;@) {
+sub between ($$&) {
   my ( $before, $after, $block, @rest ) = @_;
   if ($before > $after) {
     my $realBefore = $after;
@@ -137,26 +121,38 @@ sub between ($$&;@) {
   croak 'Useless bare between()' unless wantarray;
 
   my $caller = caller;
-  _subname("${caller}::finally {...} " => $block)
-    if _HAS_SUBNAME;
+  subname("${caller}::between {...} " => $block);
+
   return (
-    bless({before=>$before, after=>$after,code=>\$block}, 'Time::Activated::Between'),
+    bless({before=>$before, after=>$after,code=>$block}, 'Time::Activated::Between'),
     @rest,
   );
 }
 
-sub always (&;@) {
-  my ( $block, @rest ) = @_;
+sub execute(&) {
+  return $_[0];
+}
 
-  croak 'Useless bare always()' unless wantarray;
+#sub always ($;) {
+#  my ( $block, @rest ) = @_;
+#
+#  croak 'Useless bare always()' unless wantarray;
+#
+#  my $caller = caller;
+#  subname("${caller}::always {...} " => \&$block);
+#
+#  return (
+#    bless({code=>\&$block}, 'Time::Activated::Always'),
+#    @rest,
+#  );
+#}
 
-  my $caller = caller;
-  _subname("${caller}::finally {...} " => $block)
-    if _HAS_SUBNAME;
-  return (
-    bless({code=>\$block}, 'Time::Activated::Always'),
-    @rest,
-  );
+sub _spawn_dt {
+  my ($iso8601orDT) = @_;
+
+  my $dt = ref $iso8601orDT && UNIVERSAL::isa($iso8601orDT,'DateTime')?$iso8601orDT:DateTime::Format::ISO8601->parse_datetime($iso8601orDT);
+
+  return $dt;
 }
 
 __PACKAGE__
