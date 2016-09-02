@@ -1,652 +1,354 @@
+=pod
+
+=encoding UTF-8
+
+=cut
+
 use strict;
 use warnings;
+
 package Time::Activated;
 
 use 5.8.8;
 
+=head1 NAME
+
+Time::Activated - Syntactic sugar over time activated code supporting DateTime and ISO8601 (a.k.a. "Javascript dates").
+
+=head1 VERSION
+
+Version 0.10
+
+=cut
+
 our $VERSION = '0.10';
 
+=head1 SYNOPSIS
+
+	use Time::Activated;
+
+	# simple statements
+	time_activated after '1985-01-01T00:00:00', execute { print "A new feature has been activeted beginning Jan 1st 1985!" };
+	time_activated before '1986-12-31T00:00:00', execute { print "Support for this feature ends by 1986!" };
+	time_activated before '2000', execute { print "Let's dance like its 1999!" };
+	time_activated between '2016-01-01T00:00:00', '2016-12-31T23:59:59', execute { print "Business logic exception for 2016!" };
+
+	# combined statements a la try {} catch {} by Try::Tiny (tm)
+	time_activated
+		after '1985-01T00:00:00-03:00', execute { print "New business logic!" }, # <-- Gotcha! it is a ,
+		before '1986-12-31T00:00:00-03:00', execute { print "Old business logic!" };
+
+	# elements get evaluated in order
+	time_activated
+		before '1986-12-31T00:00:00-03:00', execute { print "Old business logic!" }, # <-- Switch that ;
+		after '1985-01-01T00:00:00-03:00', execute { print "New business logic!" }; # <-- Switch that ,
+
+	# all overlapping allowed, all matching gets executed
+	time_activated
+		after '2018', execute { print "This is from 2018-01-01 and on." },
+		after '2018-06-01', execute { print "This is from 2018-06-01 and on only, but on top of what we do after 2018-01-01." };
+
+	# FANCY and... cof... recommended syntax...
+	time_activated
+		after '2018' => execute { print "Welcome to new business process for 2018!" },
+		after '2019' => execute { print "This is added on top of 2018 processes for 2019!" };
+
+	# DateTime objects can be used to define points in time
+	my $dt = DateTime->new(year=>2018, month=>10, day=>16);
+	time_activated
+		after $dt => execute { print "This happens after 2018-10-16!" };
+
+=head1 DESCRIPTION
+
+This modules aims at managing and documenting time activated code such as that which may araise from migrations and planified process changes in a way that can be
+integrated and tested in advance.
+
+You can use Time::Activated C<before>, C<after> and C<between> to state which parts of code will be executed on certain dates due to changing business rules,
+programmed web service changes in endpoints/contracts or other time related events.
+
+=cut
+
 use Exporter 5.57 'import';
-our @EXPORT = our @EXPORT_OK = qw(time_activated before after between always execute);
+our @EXPORT = our @EXPORT_OK = qw(time_activated before after between execute);
+
+=head1 EXPORTS
+
+By default Time::Activated exports C<time_activated>, C<before>, C<after>, C<between> and C<execute>.
+
+If you need to rename the C<time_activated>, C<after>, C<before>, C<between> or C<executye> keyword consider using L<Sub::Import> to
+get L<Sub::Exporter>'s flexibility.
+
+If automatic exporting sound nasty: use Time::Activated qw();
+
+=head1 SYNTAX
+
+time_activated "CONDITION" "WHEN" "WHAT"
+
+=head2 "CONDITION"
+
+Can be any of C<after>, C<before>, C<between>.
+C<after>, accepts a parameters representing a point in time B<at and after> which the execute statement will be executed.
+C<before>, accepts a parameters representing a point in time B<before, but not including>, which the execute statement will be executed.
+C<between>, accepts two parameters representing a range in time B<between, both limits included>, which the execute statement will be executed.
+
+=head2 "WHEN"
+
+Is either a DateTime object or a scalar representing a iso8601 (a.k.a. Javascript date)
+
+Expension is supported so '2000', '2000-01', '2000-01-01' and '2000-01-01T00:00' all are equivalents to '2000-01-01T00:00:00'.
+Timezones are supported and honored. Thus:
+
+    time_activated
+		after '1999-12-31T23:00:00-01:00' => execute { print('Matches from 2000-01-01T00:00:00 GMT!') },
+		after '2000-01-01T00:00:00+01:00' => execute { print('Matches from 1999-01-01T23:00:00 GMT!') };
+
+C<after> includes the exact time which is used as parameter, C<before> does not.
+Thus using C<after> and C<before> with the same time parameter ensures that only one statement gets executed.
+i.e.:
+
+	time_activated
+		before 	SOME_DATE => execute { print "Before!" },
+		after 	SOME_DATE => execute { print "After!" };
+
+
+=head2 "WHAT"
+
+Is either an anonymous code block or a reference to subroutine
+Code that will be executed on a given conditions in many ways:
+
+	time_activated
+		after '2001' => execute \&my_great_new_feature; #No parameters can be passed with references...
+
+	time_activated
+		after '2000' => execute { print 'Y2K ready!' },
+		after '2001' => execute (\&my_great_new_feature), #References with multilines need ()
+		after '2002' => execute { &my_great_new_feature("We need parameters by 2002")};
+
+=head2 CONSTANTS
+
+It is cool to use constants documenting both time and intent.
+
+	use constants PROCESS_X_CUTOVER_DATE => '2017-01-01T00:00:00';
+
+	time_activated after PROCESS_X_CUTOVER_DATE => execute { &new_business_process($some_state) };
+
+=cut
+
+=head1 TESTING
+
+L<Test::MockTime> is your friend.
+
+	use Test::More tests => 1;
+	use Time::Activated;
+	use Test::MockTime;
+
+	Test::MockTime::set_absolute_time('1986-05-27T00:00:00Z');
+	time_activated after '1985-01-01T00:00:00-03:00' => execute { pass('Basic after') }; # this gets executed
+
+	Test::MockTime::set_absolute_time('1984-05-27T00:00:00Z');
+	time_activated after '1985-01-01T00:00:00-03:00' => execute { fail('Basic after') }; # this does not get executed
+
+=cut
 
 use Carp;
-$Carp::Internal{+__PACKAGE__}++;
+$Carp::Internal{ +__PACKAGE__ }++;
 
 use Sub::Name 0.08;
 use DateTime;
 use DateTime::Format::ISO8601;
 
+use Data::Dumper;
+
+=head1 IMPLEMENTATION
+
+=head2 time_activated
+
+C<time_activated> is both the syntactical placeholder for gramar in C<Time::Activated> and the internal implementation of the modules functionality.
+
+Syntactically the structure is like so (note the ','s and ';'):
+
+	time_activated
+		after ..., execute ...,
+		before ..., execute ...,
+		between ..., ... execute ...;
+
+Alternatively some , can be changed for a => for a fancy syntax. This abuses anonymous hashes, some inteligent selections of prototypes (stolen from L<Try::Tiny>) and probably
+other clever perl-ish syntactical elements that escape my understanding. Note '=>'s, ','s and ';':
+
+	time_activated
+		after ... => execute ...,
+		before ... => execute ...,
+		between ... => ... => execute ...; #Given. This does not look so fancy but more into the weird side...
+
+=cut
+
+# Blatantly stolen from Try::Tiny since it really makes sence and changing it produces headaches.
 # Need to prototype as @ not $$ because of the way Perl evaluates the prototype.
 # Keeping it at $$ means you only ever get 1 sub because we need to eval in a list
 # context & not a scalar one
 
 sub time_activated (@) {
-  my (@stanzas) = @_;
+    my (@stanzas) = @_;
 
-  # we need to save this here, the eval block will be in scalar context due
-  # to $failed
-  my $wantarray = wantarray;
-
-  # find labeled blocks in the argument list.
-  # catch and finally tag the blocks by blessing a scalar reference to them.
-  my $now = DateTime->now();
-  foreach my $stanza (@stanzas) {
-    if ( ref($stanza) eq 'Time::Activated::Always') {
-      &{$stanza->{code}};
-    } elsif (ref($stanza) eq 'Time::Activated::Before') {
-      if ($now < $stanza->{before}) {
-       &{$stanza->{code}};
-      }
-    } elsif (ref($stanza) eq 'Time::Activated::After') {
-      if ($now > $stanza->{after}) {
-        &{$stanza->{code}};
-      }
-    } elsif (ref($stanza) eq 'Time::Activated::Between') {
-      if ($now < $stanza->{before} && $now > ${$stanza}->{after}) {
-        &{$stanza->{code}};
-      }
-    } else {
-      croak('time_activated() encountered an unexpected argument ('
-      . ( defined $stanza ? $stanza : 'undef' ) . ') - perhaps a missing semi-colon?');
+    my $now = DateTime->now();
+    foreach my $stanza (@stanzas) {
+		if (ref($stanza) eq 'Time::Activated::Before') {
+			&{$stanza->{code}} if $now < $stanza->{before};
+		} elsif (ref($stanza) eq 'Time::Activated::After') {
+			&{$stanza->{code}} if $now >= $stanza->{after};
+		} elsif (ref($stanza) eq 'Time::Activated::Between') {
+			if ($stanza->{after} > $stanza->{before}) {
+                my $realBefore = $stanza->{after};
+                $stanza->{after}  = $stanza->{before};
+                $stanza->{before} = $realBefore;
+            }
+			&{$stanza->{code}} if ($now >= $stanza->{after} && $now <= $stanza->{before});
+		} else {
+			croak('time_activated() encountered an unexpected argument (' . ( defined $stanza ? $stanza : 'undef' ) . ') - perhaps a missing semi-colon?' );
+		}
     }
-  }
-
-  # name the blocks if we have Sub::Name installed
-  #my $caller = caller;
-  #_subname("${caller}::time_activated {...} " => $time_activated)
-  #  if _HAS_SUBNAME;
-
-  # set up a scope guard to invoke the finally block at the end
-  # my @guards = map { Time::Activated::ScopeGuard->_new($_, $failed ? $error : ()) } @finally;
-
-  # at this point $failed contains a true value if the eval died, even if some
-  # destructor overwrote $@ as the eval was unwinding.
-  #if ( $failed ) {
-    # if we got an error, invoke the catch block.
-   # if ( $catch ) {
-      # This works like given($error), but is backwards compatible and
-      # sets $_ in the dynamic scope for the body of C<$catch>
-    #  for ($error) {
-     #   return $catch->($error);
-     
-     # }
-
-      # in case when() was used without an explicit return, the C<for>
-      # loop will be aborted and there's no useful return value
-    #}
-
-  #  return;
-  #} else {
-  #  # no failure, $@ is back to what it was, everything is fine
-  #  return $wantarray ? @ret : $ret[0];
-  #}
 }
 
-sub before ($$) {
-  my ( $before, $block, @rest ) = @_;
+=head2 before
 
-  croak 'Useless bare before()' unless wantarray;
+C<before> defines a point in time before B<not including the exact point in time> which code is executed.
 
-  my $caller = caller;
-  subname("${caller}::before {...} " => \&$block);
+This does not happen before January 1st 2018 at 00:00 but does happen from that exact point in time and on.
 
-  return (
-    bless({before=>$before, code=>\&$block}, 'Time::Activated::Before'),
-    @rest,
-  );
+	time_activated
+		before '2018', execute { print "We are awaiting for 1/1/2018..." };
+
+Another fancy way to say do not do that before January 1st 2018 at 00:00.
+
+	ime_activated
+		before '2018' => execute { print "We are awaiting for 1/1/2018..." };
+
+A fancy way to combine before statements.
+
+	time_activated
+		before '2018' => execute { print "We are awaiting for 1/1/2018..." },
+		before '2019' => execute { print "Not quite there for 1/1/2019..." };
+
+=cut
+
+sub before ($$;@) {
+    my ( $before, $block, @rest ) = @_;
+
+    croak 'Useless bare before()' unless wantarray;
+
+    my $caller = caller;
+    subname("${caller}::before {...} " => \&$block);
+
+    return (bless({ before => &_spawn_dt($before), code => \&$block },'Time::Activated::Before'), @rest);
 }
 
-sub after ($$;) {
-  my ( $after, $block, @rest ) = @_;
+=head2 after
 
-  croak 'Useless bare after()' unless wantarray;
+C<after> defines a point in time after B<including the exact point in time> which code is executed.
 
-  my $caller = caller;
-  subname("${caller}::after {...} " => \&$block);
+	time_activated
+		after '2018' => execute { print "Wea are either at 1/1/2018 or after it..." };
 
-  return (
-    bless({after=>_spawn_dt($after), code=>\&$block}, 'Time::Activated::After'),
-    @rest,
-  );
+As with C<before> statements can be combined with C<before>, C<after> and C<between> with no limit.
+
+=cut
+
+sub after ($$;@) {
+    my ( $after, $block, @rest ) = @_;
+
+    croak 'Useless bare after()' unless wantarray;
+
+    my $caller = caller;
+    subname("${caller}::after {...} " => \&$block);
+
+    return (bless({ after => &_spawn_dt($after), code => \&$block },'Time::Activated::After'), @rest);
 }
 
-sub between ($$&) {
-  my ( $before, $after, $block, @rest ) = @_;
-  if ($before > $after) {
-    my $realBefore = $after;
-    $after = $before;
-    $before = $realBefore;
-  }
+=head2 between
 
-  croak 'Useless bare between()' unless wantarray;
+C<between> defines two points in time between which code is executes B<including both exact points in time>.
 
-  my $caller = caller;
-  subname("${caller}::between {...} " => $block);
+	time_activated
+		between '2018' => '2018-12-31T23:59:59' => execute { print "This is 2018..." };
 
-  return (
-    bless({before=>$before, after=>$after,code=>$block}, 'Time::Activated::Between'),
-    @rest,
-  );
+As with C<before> statements can be combined with C<before>, C<after> and C<between> with no limit.
+
+=cut
+
+sub between ($$$;@) {
+    my ( $after, $before, $block, @rest ) = @_;
+
+    croak 'Useless bare between()' unless wantarray;
+
+    my $caller = caller;
+    subname("${caller}::between {...} " => $block);
+
+    return (bless({ before => &_spawn_dt($before), after  => &_spawn_dt($after), code   => $block },'Time::Activated::Between'), @rest);
 }
+
+=head2 execute
+
+Exists for the sole reason of verbosity.
+Accepts a single parameters that must be a subroutine or anonymous code block.
+
+	execute { print "This is a verbose way of saying that this will be executed!" };
+
+=cut
 
 sub execute(&) {
-  return $_[0];
+    return $_[0];
 }
 
-#sub always ($;) {
-#  my ( $block, @rest ) = @_;
-#
-#  croak 'Useless bare always()' unless wantarray;
-#
-#  my $caller = caller;
-#  subname("${caller}::always {...} " => \&$block);
-#
-#  return (
-#    bless({code=>\&$block}, 'Time::Activated::Always'),
-#    @rest,
-#  );
-#}
+=head2 INTERNALS
+
+=head3 _spawn_dt
+
+C<_spawn_dt> is a private function defined in hopes that additional date formats can be used to define points in time.
+Currently supported formats for all date time.
+
+=cut
 
 sub _spawn_dt {
-  my ($iso8601orDT) = @_;
+    my ($iso8601orDT) = @_;
 
-  my $dt = ref $iso8601orDT && UNIVERSAL::isa($iso8601orDT,'DateTime')?$iso8601orDT:DateTime::Format::ISO8601->parse_datetime($iso8601orDT);
+    my $dt =
+      ref $iso8601orDT && UNIVERSAL::isa( $iso8601orDT, 'DateTime' )
+      ? $iso8601orDT
+      : DateTime::Format::ISO8601->parse_datetime($iso8601orDT);
 
-  return $dt;
+    return $dt;
 }
 
 __PACKAGE__
 
 __END__
 
-=pod
-
-=encoding UTF-8
-
-=head1 NAME
-
-Try::Tiny - minimal try/catch with proper preservation of $@
-
-=head1 VERSION
-
-version 0.24
-
-=head1 SYNOPSIS
-
-You can use Try::Tiny's C<try> and C<catch> to expect and handle exceptional
-conditions, avoiding quirks in Perl and common mistakes:
-
-  # handle errors with a catch handler
-  try {
-    die "foo";
-  } catch {
-    warn "caught error: $_"; # not $@
-  };
-
-You can also use it like a standalone C<eval> to catch and ignore any error
-conditions.  Obviously, this is an extreme measure not to be undertaken
-lightly:
-
-  # just silence errors
-  try {
-    die "foo";
-  };
-
-=head1 DESCRIPTION
-
-This module provides bare bones C<try>/C<catch>/C<finally> statements that are designed to
-minimize common mistakes with eval blocks, and NOTHING else.
-
-This is unlike L<TryCatch> which provides a nice syntax and avoids adding
-another call stack layer, and supports calling C<return> from the C<try> block to
-return from the parent subroutine. These extra features come at a cost of a few
-dependencies, namely L<Devel::Declare> and L<Scope::Upper> which are
-occasionally problematic, and the additional catch filtering uses L<Moose>
-type constraints which may not be desirable either.
-
-The main focus of this module is to provide simple and reliable error handling
-for those having a hard time installing L<TryCatch>, but who still want to
-write correct C<eval> blocks without 5 lines of boilerplate each time.
-
-It's designed to work as correctly as possible in light of the various
-pathological edge cases (see L</BACKGROUND>) and to be compatible with any style
-of error values (simple strings, references, objects, overloaded objects, etc).
-
-If the C<try> block dies, it returns the value of the last statement executed in
-the C<catch> block, if there is one. Otherwise, it returns C<undef> in scalar
-context or the empty list in list context. The following examples all
-assign C<"bar"> to C<$x>:
-
-  my $x = try { die "foo" } catch { "bar" };
-  my $x = try { die "foo" } || "bar";
-  my $x = (try { die "foo" }) // "bar";
-
-  my $x = eval { die "foo" } || "bar";
-
-You can add C<finally> blocks, yielding the following:
-
-  my $x;
-  try { die 'foo' } finally { $x = 'bar' };
-  try { die 'foo' } catch { warn "Got a die: $_" } finally { $x = 'bar' };
-
-C<finally> blocks are always executed making them suitable for cleanup code
-which cannot be handled using local.  You can add as many C<finally> blocks to a
-given C<try> block as you like.
-
-Note that adding a C<finally> block without a preceding C<catch> block
-suppresses any errors. This behaviour is consistent with using a standalone
-C<eval>, but it is not consistent with C<try>/C<finally> patterns found in
-other programming languages, such as Java, Python, Javascript or C#. If you
-learnt the C<try>/C<finally> pattern from one of these languages, watch out for
-this.
-
-=head1 EXPORTS
-
-All functions are exported by default using L<Exporter>.
-
-If you need to rename the C<try>, C<catch> or C<finally> keyword consider using
-L<Sub::Import> to get L<Sub::Exporter>'s flexibility.
-
-=over 4
-
-=item try (&;@)
-
-Takes one mandatory C<try> subroutine, an optional C<catch> subroutine and C<finally>
-subroutine.
-
-The mandatory subroutine is evaluated in the context of an C<eval> block.
-
-If no error occurred the value from the first block is returned, preserving
-list/scalar context.
-
-If there was an error and the second subroutine was given it will be invoked
-with the error in C<$_> (localized) and as that block's first and only
-argument.
-
-C<$@> does B<not> contain the error. Inside the C<catch> block it has the same
-value it had before the C<try> block was executed.
-
-Note that the error may be false, but if that happens the C<catch> block will
-still be invoked.
-
-Once all execution is finished then the C<finally> block, if given, will execute.
-
-=item catch (&;@)
-
-Intended to be used in the second argument position of C<try>.
-
-Returns a reference to the subroutine it was given but blessed as
-C<Try::Tiny::Catch> which allows try to decode correctly what to do
-with this code reference.
-
-  catch { ... }
-
-Inside the C<catch> block the caught error is stored in C<$_>, while previous
-value of C<$@> is still available for use.  This value may or may not be
-meaningful depending on what happened before the C<try>, but it might be a good
-idea to preserve it in an error stack.
-
-For code that captures C<$@> when throwing new errors (i.e.
-L<Class::Throwable>), you'll need to do:
-
-  local $@ = $_;
-
-=item finally (&;@)
-
-  try     { ... }
-  catch   { ... }
-  finally { ... };
-
-Or
-
-  try     { ... }
-  finally { ... };
-
-Or even
-
-  try     { ... }
-  finally { ... }
-  catch   { ... };
-
-Intended to be the second or third element of C<try>. C<finally> blocks are always
-executed in the event of a successful C<try> or if C<catch> is run. This allows
-you to locate cleanup code which cannot be done via C<local()> e.g. closing a file
-handle.
-
-When invoked, the C<finally> block is passed the error that was caught.  If no
-error was caught, it is passed nothing.  (Note that the C<finally> block does not
-localize C<$_> with the error, since unlike in a C<catch> block, there is no way
-to know if C<$_ == undef> implies that there were no errors.) In other words,
-the following code does just what you would expect:
-
-  try {
-    die_sometimes();
-  } catch {
-    # ...code run in case of error
-  } finally {
-    if (@_) {
-      print "The try block died with: @_\n";
-    } else {
-      print "The try block ran without error.\n";
-    }
-  };
-
-B<You must always do your own error handling in the C<finally> block>. C<Try::Tiny> will
-not do anything about handling possible errors coming from code located in these
-blocks.
-
-Furthermore B<exceptions in C<finally> blocks are not trappable and are unable
-to influence the execution of your program>. This is due to limitation of
-C<DESTROY>-based scope guards, which C<finally> is implemented on top of. This
-may change in a future version of Try::Tiny.
-
-In the same way C<catch()> blesses the code reference this subroutine does the same
-except it bless them as C<Try::Tiny::Finally>.
-
-=back
-
-=head1 BACKGROUND
-
-There are a number of issues with C<eval>.
-
-=head2 Clobbering $@
-
-When you run an C<eval> block and it succeeds, C<$@> will be cleared, potentially
-clobbering an error that is currently being caught.
-
-This causes action at a distance, clearing previous errors your caller may have
-not yet handled.
-
-C<$@> must be properly localized before invoking C<eval> in order to avoid this
-issue.
-
-More specifically, C<$@> is clobbered at the beginning of the C<eval>, which
-also makes it impossible to capture the previous error before you die (for
-instance when making exception objects with error stacks).
-
-For this reason C<try> will actually set C<$@> to its previous value (the one
-available before entering the C<try> block) in the beginning of the C<eval>
-block.
-
-=head2 Localizing $@ silently masks errors
-
-Inside an C<eval> block, C<die> behaves sort of like:
-
-  sub die {
-    $@ = $_[0];
-    return_undef_from_eval();
-  }
-
-This means that if you were polite and localized C<$@> you can't die in that
-scope, or your error will be discarded (printing "Something's wrong" instead).
-
-The workaround is very ugly:
-
-  my $error = do {
-    local $@;
-    eval { ... };
-    $@;
-  };
-
-  ...
-  die $error;
-
-=head2 $@ might not be a true value
-
-This code is wrong:
-
-  if ( $@ ) {
-    ...
-  }
-
-because due to the previous caveats it may have been unset.
-
-C<$@> could also be an overloaded error object that evaluates to false, but
-that's asking for trouble anyway.
-
-The classic failure mode is:
-
-  sub Object::DESTROY {
-    eval { ... }
-  }
-
-  eval {
-    my $obj = Object->new;
-
-    die "foo";
-  };
-
-  if ( $@ ) {
-
-  }
-
-In this case since C<Object::DESTROY> is not localizing C<$@> but still uses
-C<eval>, it will set C<$@> to C<"">.
-
-The destructor is called when the stack is unwound, after C<die> sets C<$@> to
-C<"foo at Foo.pm line 42\n">, so by the time C<if ( $@ )> is evaluated it has
-been cleared by C<eval> in the destructor.
-
-The workaround for this is even uglier than the previous ones. Even though we
-can't save the value of C<$@> from code that doesn't localize, we can at least
-be sure the C<eval> was aborted due to an error:
-
-  my $failed = not eval {
-    ...
-
-    return 1;
-  };
-
-This is because an C<eval> that caught a C<die> will always return a false
-value.
-
-=head1 SHINY SYNTAX
-
-Using Perl 5.10 you can use L<perlsyn/"Switch statements">.
-
-=for stopwords topicalizer
-
-The C<catch> block is invoked in a topicalizer context (like a C<given> block),
-but note that you can't return a useful value from C<catch> using the C<when>
-blocks without an explicit C<return>.
-
-This is somewhat similar to Perl 6's C<CATCH> blocks. You can use it to
-concisely match errors:
-
-  try {
-    require Foo;
-  } catch {
-    when (/^Can't locate .*?\.pm in \@INC/) { } # ignore
-    default { die $_ }
-  };
-
 =head1 CAVEATS
 
-=over 4
+You cannot have this syntax, some , and/or => required:
 
-=item *
-
-C<@_> is not available within the C<try> block, so you need to copy your
-argument list. In case you want to work with argument values directly via C<@_>
-aliasing (i.e. allow C<$_[1] = "foo">), you need to pass C<@_> by reference:
-
-  sub foo {
-    my ( $self, @args ) = @_;
-    try { $self->bar(@args) }
-  }
-
-or
-
-  sub bar_in_place {
-    my $self = shift;
-    my $args = \@_;
-    try { $_ = $self->bar($_) for @$args }
-  }
-
-=item *
-
-C<return> returns from the C<try> block, not from the parent sub (note that
-this is also how C<eval> works, but not how L<TryCatch> works):
-
-  sub parent_sub {
-    try {
-      die;
-    }
-    catch {
-      return;
-    };
-
-    say "this text WILL be displayed, even though an exception is thrown";
-  }
-
-Instead, you should capture the return value:
-
-  sub parent_sub {
-    my $success = try {
-      die;
-      1;
-    };
-    return unless $success;
-
-    say "This text WILL NEVER appear!";
-  }
-  # OR
-  sub parent_sub_with_catch {
-    my $success = try {
-      die;
-      1;
-    }
-    catch {
-      # do something with $_
-      return undef; #see note
-    };
-    return unless $success;
-
-    say "This text WILL NEVER appear!";
-  }
-
-Note that if you have a C<catch> block, it must return C<undef> for this to work,
-since if a C<catch> block exists, its return value is returned in place of C<undef>
-when an exception is thrown.
-
-=item *
-
-C<try> introduces another caller stack frame. L<Sub::Uplevel> is not used. L<Carp>
-will not report this when using full stack traces, though, because
-C<%Carp::Internal> is used. This lack of magic is considered a feature.
-
-=for stopwords unhygienically
-
-=item *
-
-The value of C<$_> in the C<catch> block is not guaranteed to be the value of
-the exception thrown (C<$@>) in the C<try> block.  There is no safe way to
-ensure this, since C<eval> may be used unhygienically in destructors.  The only
-guarantee is that the C<catch> will be called if an exception is thrown.
-
-=item *
-
-The return value of the C<catch> block is not ignored, so if testing the result
-of the expression for truth on success, be sure to return a false value from
-the C<catch> block:
-
-  my $obj = try {
-    MightFail->new;
-  } catch {
-    ...
-
-    return; # avoid returning a true value;
-  };
-
-  return unless $obj;
-
-=item *
-
-C<$SIG{__DIE__}> is still in effect.
-
-Though it can be argued that C<$SIG{__DIE__}> should be disabled inside of
-C<eval> blocks, since it isn't people have grown to rely on it. Therefore in
-the interests of compatibility, C<try> does not disable C<$SIG{__DIE__}> for
-the scope of the error throwing code.
-
-=item *
-
-Lexical C<$_> may override the one set by C<catch>.
-
-For example Perl 5.10's C<given> form uses a lexical C<$_>, creating some
-confusing behavior:
-
-  given ($foo) {
-    when (...) {
-      try {
-        ...
-      } catch {
-        warn $_; # will print $foo, not the error
-        warn $_[0]; # instead, get the error like this
-      }
-    }
-  }
-
-Note that this behavior was changed once again in L<Perl5 version 18
-|https://metacpan.org/module/perldelta#given-now-aliases-the-global-_>.
-However, since the entirety of lexical C<$_> is now L<considered experimental
-|https://metacpan.org/module/perldelta#Lexical-_-is-now-experimental>, it
-is unclear whether the new version 18 behavior is final.
-
-=back
+	time_activated
+		before '2016-09-24' {}
+		after '2016-10-24' {};
 
 =head1 SEE ALSO
 
 =over 4
 
-=item L<TryCatch>
+=item L<Try::Tiny>
 
-Much more feature complete, more convenient semantics, but at the cost of
-implementation complexity.
-
-=item L<autodie>
-
-Automatic error throwing for builtin functions and more. Also designed to
-work well with C<given>/C<when>.
-
-=item L<Throwable>
-
-A lightweight role for rolling your own exception classes.
-
-=item L<Error>
-
-Exception object implementation with a C<try> statement. Does not localize
-C<$@>.
-
-=item L<Exception::Class::TryCatch>
-
-Provides a C<catch> statement, but properly calling C<eval> is your
-responsibility.
-
-The C<try> keyword pushes C<$@> onto an error stack, avoiding some of the
-issues with C<$@>, but you still need to localize to prevent clobbering.
+A non related module that became the inspiration for Time::Activated.
 
 =back
 
-=head1 LIGHTNING TALK
-
-I gave a lightning talk about this module, you can see the slides (Firefox
-only):
-
-L<http://web.archive.org/web/20100628040134/http://nothingmuch.woobling.org/talks/takahashi.xul>
-
-Or read the source:
-
-L<http://web.archive.org/web/20100305133605/http://nothingmuch.woobling.org/talks/yapc_asia_2009/try_tiny.yml>
-
 =head1 VERSION CONTROL
 
-L<http://github.com/doy/try-tiny/>
+L<http://github.com/gbarco/Time-Activated/>
 
 =head1 SUPPORT
 
-Bugs may be submitted through L<the RT bug tracker|https://rt.cpan.org/Public/Dist/Display.html?Name=Try-Tiny>
-(or L<bug-Try-Tiny@rt.cpan.org|mailto:bug-Try-Tiny@rt.cpan.org>).
+Bugs may be submitted through L<the RT bug tracker|https://rt.cpan.org/Public/Dist/Display.html?Name=Time-Activated>
+(or L<bug-Time-Activated@rt.cpan.org|mailto:bug-Time-Activated@rt.cpan.org>).
 
 =head1 AUTHORS
 
@@ -654,108 +356,20 @@ Bugs may be submitted through L<the RT bug tracker|https://rt.cpan.org/Public/Di
 
 =item *
 
-יובל קוג'מן (Yuval Kogman) <nothingmuch@woobling.org>
-
-=item *
-
-Jesse Luehrs <doy@tozt.net>
+Gonzalo Barco <gbarco uy at gmail.com, no spaces>
 
 =back
 
-=head1 CONTRIBUTORS
+=head1 LICENSE AND COPYRIGHT
 
-=for stopwords Karen Etheridge Peter Rabbitson Ricardo Signes Mark Fowler Graham Knop Dagfinn Ilmari Mannsåker Paul Howarth Rudolf Leermakers anaxagoras awalker chromatic Alex cm-perl Andrew Yates David Lowe Glenn Hans Dieter Pearcey Jonathan Yu Marc Mims Stosberg
+Copyright 2016 Gonzalo Barco.
 
-=over 4
+This program is free software; you can redistribute it and/or modify it
+under the terms of either: the GNU General Public License as published
+by the Free Software Foundation; or the Artistic License.
 
-=item *
-
-Karen Etheridge <ether@cpan.org>
-
-=item *
-
-Peter Rabbitson <ribasushi@cpan.org>
-
-=item *
-
-Ricardo Signes <rjbs@cpan.org>
-
-=item *
-
-Mark Fowler <mark@twoshortplanks.com>
-
-=item *
-
-Graham Knop <haarg@haarg.org>
-
-=item *
-
-Dagfinn Ilmari Mannsåker <ilmari@ilmari.org>
-
-=item *
-
-Paul Howarth <paul@city-fan.org>
-
-=item *
-
-Rudolf Leermakers <rudolf@hatsuseno.org>
-
-=item *
-
-anaxagoras <walkeraj@gmail.com>
-
-=item *
-
-awalker <awalker@sourcefire.com>
-
-=item *
-
-chromatic <chromatic@wgz.org>
-
-=item *
-
-Alex <alex@koban.(none)>
-
-=item *
-
-cm-perl <cm-perl@users.noreply.github.com>
-
-=item *
-
-Andrew Yates <ayates@haddock.local>
-
-=item *
-
-David Lowe <davidl@lokku.com>
-
-=item *
-
-Glenn Fowler <cebjyre@cpan.org>
-
-=item *
-
-Hans Dieter Pearcey <hdp@weftsoar.net>
-
-=item *
-
-Jonathan Yu <JAWNSY@cpan.org>
-
-=item *
-
-Marc Mims <marc@questright.com>
-
-=item *
-
-Mark Stosberg <mark@stosberg.com>
-
-=back
-
-=head1 COPYRIGHT AND LICENCE
-
-This software is Copyright (c) 2009 by יובל קוג'מן (Yuval Kogman).
-
-This is free software, licensed under:
-
-  The MIT (X11) License
+See http://dev.perl.org/licenses/ for more information.
 
 =cut
+
+1;
