@@ -1,48 +1,40 @@
 use strict;
 use warnings;
-use Test::More tests => 2;
-use Test::Exception;
-use Test::MockTime;
-use Try::Tiny;
-
-use lib 'lib';
-use lib '../lib';
+use Test::More tests => 3;
+use Test::MockTime qw();
 
 use Time::Activated;
 use DateTime;
 
-time_activated
-  after '00:00', execute { pass('After simple syntax iso8601 relative time') };
+subtest 'Basic syntax iso8601' => sub {
+	plan tests => 3;
 
-my $past = DateTime::Infinite::Past->new();
+	Test::MockTime::set_absolute_time('1986-05-27T00:00:00Z');
 
-time_activated
-  after $past, execute { pass('After simple syntax DT past') };
+	time_activated after '1985-01-01T00:00:00-03:00', execute { pass('Basic after') };
+    time_activated before '1986-12-31T00:00:00-03:00', execute { pass('Basic before') };
+    time_activated between '1985-01-01T00:00:00Z', '1986-12-31T00:00:00Z', execute { pass('Basic between') };
+};
 
-my $future = DateTime::Infinite::Future->new();
+subtest 'Basic inline documentation syntax iso8601' => sub {
+	plan tests => 3;
 
-time_activated
-  after $future, execute { fail('After simple syntax DT future should never be in the past') };
+	Test::MockTime::set_absolute_time('2018-05-27T00:00:00Z');
+	time_activated after '2018', execute { pass('Basic documented after 2018') };
 
-#time_activated
-#  after DateTime::Infinite::Past->new(), execute { pass('After simple syntax 1st born') };
-  #after '2018', execute { pass('After simple syntax 2nd sibling') };
-  #after '2019', execute { pass('After simple syntax 3rd instance') };
+	Test::MockTime::set_absolute_time('2017-05-27T00:00:00Z');
+	time_activated before '2018', execute { pass('Basic documented before 2018') };
 
-#time_activated
-#  before '2017', execute { pass('Before simple syntax') };
+	Test::MockTime::set_absolute_time('2018-05-27T00:00:00Z');
+	time_activated between '2018','2018-12-31T23:59:59', execute { pass('Basic documented between 2018') };
+};
 
-#time_activated
-#  before('2016', sub { ok('Before 2016.')}),
-#  before('2017', sub { ok('Before called from fetus in fetus.')}),
-#  before('2017', sub { ok('Before called from fetus in fetus in... fetus.')});
+subtest 'Basic syntax DateTime' => sub {
+	plan tests => 1;
 
-  #after {
-  #  print 1;
-  #} '2016';
-  #  
-  #try {
-  #  
-  #} catch {
-  #  
-  #};
+    my $past = DateTime::Infinite::Past->new();
+    time_activated after $past, execute { pass('After simple syntax DT past') };
+
+    my $future = DateTime::Infinite::Future->new();
+    time_activated after $future, execute { fail('After simple syntax DT future should never be in the past') };
+};
