@@ -1,11 +1,9 @@
 use strict;
 use warnings;
 use Test::More tests => 2;
-use Test::Exception;
 use Test::MockTime qw();
 
 use Time::Activated;
-use DateTime;
 
 subtest 'Exact moments with after and before' => sub {
 	plan tests => 4;

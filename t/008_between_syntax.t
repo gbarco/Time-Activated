@@ -1,11 +1,9 @@
 use strict;
 use warnings;
 use Test::More tests => 3;
-use Test::Exception;
 use Test::MockTime qw();
 
 use Time::Activated;
-use DateTime;
 
 subtest 'Between simple syntax' => sub {
 	plan tests => 4;
