@@ -21,7 +21,7 @@ Version 0.11
 
 =cut
 
-our $VERSION = '0.11';
+our $VERSION = '0.12';
 
 =head1 SYNOPSIS
 
@@ -319,7 +319,7 @@ sub _spawn_dt {
     return $dt;
 }
 
-__PACKAGE__
+1;
 
 __END__
 
@@ -371,5 +371,3 @@ by the Free Software Foundation; or the Artistic License.
 See http://dev.perl.org/licenses/ for more information.
 
 =cut
-
-1;
