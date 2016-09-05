@@ -189,24 +189,35 @@ other clever perl-ish syntactical elements that escape my understanding. Note '=
 
 sub time_activated (@) {
     my (@stanzas) = @_;
+	my $activations = 0;
 
     my $now = DateTime->now();
     foreach my $stanza (@stanzas) {
 		if (ref($stanza) eq 'Time::Activated::Before') {
-			&{$stanza->{code}} if $now < $stanza->{before};
+			if ($now < $now < $stanza->{before}) {
+				&{$stanza->{code}};
+				$activations++;
+			}
 		} elsif (ref($stanza) eq 'Time::Activated::After') {
-			&{$stanza->{code}} if $now >= $stanza->{after};
+			if ($now >= $stanza->{after}) {
+				&{$stanza->{code}};
+				$activations++;
+			}
 		} elsif (ref($stanza) eq 'Time::Activated::Between') {
 			if ($stanza->{after} > $stanza->{before}) {
                 my $realBefore = $stanza->{after};
                 $stanza->{after}  = $stanza->{before};
                 $stanza->{before} = $realBefore;
             }
-			&{$stanza->{code}} if ($now >= $stanza->{after} && $now <= $stanza->{before});
+			if ($now >= $stanza->{after} && $now <= $stanza->{before}) {
+				&{$stanza->{code}};
+				$activations++;
+			};
 		} else {
 			croak('time_activated() encountered an unexpected argument (' . ( defined $stanza ? $stanza : 'undef' ) . ') - perhaps a missing semi-colon?' );
 		}
     }
+	return $activations;
 }
 
 =head2 before
