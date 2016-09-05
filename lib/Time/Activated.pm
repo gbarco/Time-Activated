@@ -296,7 +296,8 @@ Accepts a single parameters that must be a subroutine or anonymous code block.
 =cut
 
 sub execute(&) {
-    return $_[0];
+	my ($code) = @_;
+    return $code;
 }
 
 =head2 INTERNALS
