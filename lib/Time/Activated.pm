@@ -4,10 +4,10 @@
 
 =cut
 
+package Time::Activated;
+
 use strict;
 use warnings;
-
-package Time::Activated;
 
 use 5.8.8;
 
