@@ -151,7 +151,7 @@ L<Test::MockTime> is your friend.
 =cut
 
 use Carp;
-$Carp::Internal{ +__PACKAGE__ }++;
+$Carp::Internal{ __PACKAGE__ }++;
 
 use Sub::Name 0.08;
 use DateTime;
@@ -323,8 +323,7 @@ Currently supported formats for all date time.
 sub _spawn_dt {
     my ($iso8601orDT) = @_;
 
-    my $dt =
-      ref $iso8601orDT && UNIVERSAL::isa( $iso8601orDT, 'DateTime' )
+    my $dt = ref $iso8601orDT && $iso8601orDT->isa('DateTime')
       ? $iso8601orDT
       : DateTime::Format::ISO8601->parse_datetime($iso8601orDT);
 
