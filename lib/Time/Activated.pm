@@ -30,35 +30,36 @@ our $VERSION = 0.12;
 	use Time::Activated;
 
 	# simple statements
-	time_activated after '1985-01-01T00:00:00', execute { print "A new feature has been activeted beginning Jan 1st 1985!" };
-	time_activated before '1986-12-31T00:00:00', execute { print "Support for this feature ends by 1986!" };
-	time_activated before '2000', execute { print "Let's dance like its 1999!" };
-	time_activated between '2016-01-01T00:00:00', '2016-12-31T23:59:59', execute { print "Business logic exception for 2016!" };
+	time_activated after '1985-01-01T00:00:00' => execute { print "New feature beginning Jan 1st 1985!" };
+	time_activated before '1986-12-31T00:00:00' => execute { print "This feature ends by 1986!" };
+	time_activated before '2000' => execute { print "Let's dance like its 1999!" };
+	time_activated
+		between '2016-01-01T00:00:00' => '2016-12-31T23:59:59' =>
+		execute { print "Business logic exception for 2016!" };
 
 	# combined statements a la try {} catch {} by Try::Tiny (tm)
 	time_activated
-		after '1985-01T00:00:00-03:00', execute { print "New business logic!" }, # <-- Gotcha! it is a ,
-		before '1986-12-31T00:00:00-03:00', execute { print "Old business logic!" };
+		after '1985-01T00:00:00-03:00' => execute { print "New business logic!" }, # <-- Gotcha! it is a ,
+		before '1986-12-31T00:00:00-03:00' => execute { print "Old business logic!" };
 
 	# elements get evaluated in order
 	time_activated
-		before '1986-12-31T00:00:00-03:00', execute { print "Old business logic!" }, # <-- Switch that ;
-		after '1985-01-01T00:00:00-03:00', execute { print "New business logic!" }; # <-- Switch that ,
+		before '1986-12-31T00:00:00-03:00' => execute { print "Old business logic!" }, # <-- Switch that ;
+		after '1985-01-01T00:00:00-03:00' => execute { print "New business logic!" }; # <-- Switch that ,
 
-	# all overlapping allowed, all matching gets executed
+	# overlapping allowed, all matching items get executed
 	time_activated
 		after '2018', execute { print "This is from 2018-01-01 and on." },
-		after '2018-06-01', execute { print "This is from 2018-06-01 and on only, but on top of what we do after 2018-01-01." };
+		after '2018-06-01', execute { print "This is from 2018-06-01 and on. On top of the previuos." };
 
-	# FANCY and... cof... recommended syntax...
+	# Alternate syntax
 	time_activated
-		after '2018' => execute { print "Welcome to new business process for 2018!" },
-		after '2019' => execute { print "This is added on top of 2018 processes for 2019!" };
+		after '2018', execute { print "Welcome to new business process for 2018!" }, #=> is a ,
+		after '2019', execute { print "This is added on top of 2018 processes for 2019!" };
 
 	# DateTime objects can be used to define points in time
 	my $dt = DateTime->new(year=>2018, month=>10, day=>16);
-	time_activated
-		after $dt => execute { print "This happens after 2018-10-16!" };
+	time_activated after $dt => execute { print "This happens after 2018-10-16!" };
 
 =head1 DESCRIPTION
 
@@ -67,6 +68,10 @@ integrated and tested in advance.
 
 You can use Time::Activated C<before>, C<after> and C<between> to state which parts of code will be executed on certain dates due to changing business rules,
 programmed web service changes in endpoints/contracts or other time related events.
+
+=head1 USAGE
+
+
 
 =cut
 
@@ -97,7 +102,8 @@ C<between>, accepts two parameters representing a range in time B<between, both 
 
 Is either a DateTime object or a scalar representing a iso8601 (a.k.a. Javascript date)
 
-Expension is supported so '2000', '2000-01', '2000-01-01' and '2000-01-01T00:00' all are equivalents to '2000-01-01T00:00:00'.
+Expansion is supported so '2000', '2000-01', '2000-01-01' and '2000-01-01T00:00' all are equivalents to '2000-01-01T00:00:00'.
+
 Timezones are supported and honored. Thus:
 
     time_activated
