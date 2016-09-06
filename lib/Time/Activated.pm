@@ -194,13 +194,13 @@ sub time_activated (@) {
     my $now = DateTime->now();
     foreach my $stanza (@stanzas) {
 		if (ref($stanza) eq 'Time::Activated::Before') {
-			if ($now < $now < $stanza->{before}) {
-				&{$stanza->{code}};
+			if ($now < $stanza->{before}) {
+				$stanza->{code}();
 				$activations++;
 			}
 		} elsif (ref($stanza) eq 'Time::Activated::After') {
 			if ($now >= $stanza->{after}) {
-				&{$stanza->{code}};
+				$stanza->{code}();
 				$activations++;
 			}
 		} elsif (ref($stanza) eq 'Time::Activated::Between') {
@@ -210,7 +210,7 @@ sub time_activated (@) {
                 $stanza->{before} = $realBefore;
             }
 			if ($now >= $stanza->{after} && $now <= $stanza->{before}) {
-				&{$stanza->{code}};
+				$stanza->{code}();
 				$activations++;
 			};
 		} else {
@@ -248,9 +248,9 @@ sub before ($$;@) {
     croak 'Useless bare before()' unless wantarray;
 
     my $caller = caller;
-    subname("${caller}::before {...} " => \&$block);
+    subname("${caller}::before {...} " => $block);
 
-    return (bless({ before => &_spawn_dt($before), code => \&$block },'Time::Activated::Before'), @rest);
+    return (bless({before => _spawn_dt($before), code => $block},'Time::Activated::Before'), @rest);
 }
 
 =head2 after
@@ -270,9 +270,9 @@ sub after ($$;@) {
     croak 'Useless bare after()' unless wantarray;
 
     my $caller = caller;
-    subname("${caller}::after {...} " => \&$block);
+    subname("${caller}::after {...} " => $block);
 
-    return (bless({ after => &_spawn_dt($after), code => \&$block },'Time::Activated::After'), @rest);
+    return (bless({after => _spawn_dt($after), code => $block},'Time::Activated::After'), @rest);
 }
 
 =head2 between
@@ -294,7 +294,7 @@ sub between ($$$;@) {
     my $caller = caller;
     subname("${caller}::between {...} " => $block);
 
-    return (bless({ before => &_spawn_dt($before), after  => &_spawn_dt($after), code   => $block },'Time::Activated::Between'), @rest);
+    return (bless({before => _spawn_dt($before), after => _spawn_dt($after), code => $block},'Time::Activated::Between'), @rest);
 }
 
 =head2 execute
