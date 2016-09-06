@@ -49,7 +49,7 @@ subtest 'Between complex syntax' => sub {
 		between '9999-01-01T02:00:00', '9999-01-01T01:30:00', execute { pass('Between complex syntax iso8601 full no timezone future after/before FF +1') };
 };
 
-subtest 'Between complex syntax' => sub {
+subtest 'Between fancy syntax' => sub {
 	plan tests => 8;
 
 	Test::MockTime::set_absolute_time('9999-01-01T01:00:00Z');

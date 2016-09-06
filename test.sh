@@ -1,3 +1,4 @@
 #!/bin/bash
 DIR=$( dirname "$0" )
-prove -I$DIR/lib $DIR/t || prove -v -I$DIR/lib $DIR/t
+#Shuffle in parallel to check for test interdependency
+prove -j 20 -s -I$DIR/lib $DIR/t "$@" || prove -v -I$DIR/lib $DIR/t "$@"
