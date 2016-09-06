@@ -169,7 +169,7 @@ use DateTime::Format::ISO8601;
 
 =head2 time_activated
 
-C<time_activated> is both the syntactical placeholder for gramar in C<Time::Activated> and the internal implementation of the modules functionality.
+C<time_activated> is both the syntactical placeholder for grammar in C<Time::Activated> and the internal implementation of the modules functionality.
 
 Syntactically the structure is like so (note the ','s and ';'):
 
