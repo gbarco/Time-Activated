@@ -1,15 +1,17 @@
-=pod
-
-=encoding UTF-8
-
-=cut
-
 package Time::Activated;
+
+## no critic (ProhibitSubroutinePrototypes, ProhibitAutomaticExportation)
 
 use strict;
 use warnings;
 
 use 5.8.8;
+
+=pod
+
+=encoding UTF-8
+
+=cut
 
 =head1 NAME
 
@@ -17,11 +19,11 @@ Time::Activated - Syntactic sugar over time activated code supporting DateTime a
 
 =head1 VERSION
 
-Version 0.11
+Version 0.12
 
 =cut
 
-our $VERSION = '0.12';
+our $VERSION = 0.12;
 
 =head1 SYNOPSIS
 
@@ -75,8 +77,8 @@ our @EXPORT = our @EXPORT_OK = qw(time_activated before after between execute);
 
 By default Time::Activated exports C<time_activated>, C<before>, C<after>, C<between> and C<execute>.
 
-If you need to rename the C<time_activated>, C<after>, C<before>, C<between> or C<executye> keyword consider using L<Sub::Import> to
-get L<Sub::Exporter>'s flexibility.
+If you need to rename the C<time_activated>, C<after>, C<before>, C<between> or C<executye> keyword consider using L<Sub::Import|Sub::Import> to
+get L<Sub::Exporter|Sub::Exporter>'s flexibility.
 
 If automatic exporting sound nasty: use Time::Activated qw();
 
@@ -136,7 +138,7 @@ It is cool to use constants documenting both time and intent.
 
 =head1 TESTING
 
-L<Test::MockTime> is your friend.
+L<Test::MockTime|Test::MockTime> is your friend.
 
 	use Test::More tests => 1;
 	use Time::Activated;
@@ -157,9 +159,7 @@ use Sub::Name 0.08;
 use DateTime;
 use DateTime::Format::ISO8601;
 
-use Data::Dumper;
-
-=head1 IMPLEMENTATION
+=head1 SUBROUTINES/METHODS
 
 =head2 time_activated
 
@@ -172,7 +172,7 @@ Syntactically the structure is like so (note the ','s and ';'):
 		before ..., execute ...,
 		between ..., ... execute ...;
 
-Alternatively some , can be changed for a => for a fancy syntax. This abuses anonymous hashes, some inteligent selections of prototypes (stolen from L<Try::Tiny>) and probably
+Alternatively some can be changed for a => for a fancy syntax. This abuses anonymous hashes, some inteligent selections of prototypes (stolen from L<Try::Tiny|Try::Tiny>) and probably
 other clever perl-ish syntactical elements that escape my understanding. Note '=>'s, ','s and ';':
 
 	time_activated
@@ -205,9 +205,9 @@ sub time_activated (@) {
 			}
 		} elsif (ref($stanza) eq 'Time::Activated::Between') {
 			if ($stanza->{after} > $stanza->{before}) {
-                my $realBefore = $stanza->{after};
+                my $before = $stanza->{after};
                 $stanza->{after}  = $stanza->{before};
-                $stanza->{before} = $realBefore;
+                $stanza->{before} = $before;
             }
 			if ($now >= $stanza->{after} && $now <= $stanza->{before}) {
 				$stanza->{code}();
@@ -301,7 +301,7 @@ sub between ($$$;@) {
 
 Exists for the sole reason of verbosity.
 Accepts a single parameters that must be a subroutine or anonymous code block.
-
+i
 	execute { print "This is a verbose way of saying that this will be executed!" };
 
 =cut
@@ -311,21 +311,21 @@ sub execute(&) {
     return $code;
 }
 
-=head2 INTERNALS
+=head2 PRIVATES
 
 =head3 _spawn_dt
 
 C<_spawn_dt> is a private function defined in hopes that additional date formats can be used to define points in time.
-Currently supported formats for all date time.
+Currently supported formtats for all date time.
 
 =cut
 
 sub _spawn_dt {
-    my ($iso8601orDT) = @_;
+    my ($iso8601_or_datetime) = @_;
 
-    my $dt = ref $iso8601orDT && $iso8601orDT->isa('DateTime')
-      ? $iso8601orDT
-      : DateTime::Format::ISO8601->parse_datetime($iso8601orDT);
+    my $dt = ref $iso8601_or_datetime && $iso8601_or_datetime->isa('DateTime')
+      ? $iso8601_or_datetime
+      : DateTime::Format::ISO8601->parse_datetime($iso8601_or_datetime);
 
     return $dt;
 }
@@ -334,19 +334,53 @@ sub _spawn_dt {
 
 __END__
 
-=head1 CAVEATS
+=head1 DIAGNOSTICS
 
-You cannot have this syntax, some , and/or => required:
+=over 4
+
+=item time_activated
+
+(F) time_activated() encountered an unexpected argument...
+
+time_activated is not followed by either after, before or between
+
+	time_activated wierd_sub(); #<- Plain weird but it could somehow happen
+
+=item after before between
+
+(F)	Useless bare after()
+(F)	Useless bare before()
+(F)	Useless bare between()
+
+Use of xxxxx() with no time_activated before it.
+Generally the result of a ; instead of a ,.
+
+	time_activated
+		after '2018' {};
+		before '2018' {}; #<- This one triggers a 'Useless bare before()' since it is not part of the time_activated call
+
+=head1 BUGS AND LIMITATIONS
+
+No known bugs, but you cannot have this syntax.
+Some , and/or => required:
 
 	time_activated
 		before '2016-09-24' {}
 		after '2016-10-24' {};
 
+=head1 DEPENDENCIES
+
+L<DateTime|DateTime>, L<DateTime::Format::ISO8601|DateTime::Format::ISO8601>, L<Carp|Carp>, L<Exporter|Exporter>, L<Sub::Name|Sub::Name>.
+
+=head1 INCOMPATIBILITIES
+
+None I know.
+
 =head1 SEE ALSO
 
 =over 4
 
-=item L<Try::Tiny>
+=item L<Try::Tiny|Try::Tiny>
 
 A non related module that became the inspiration for Time::Activated.
 
@@ -361,7 +395,7 @@ L<http://github.com/gbarco/Time-Activated/>
 Bugs may be submitted through L<the RT bug tracker|https://rt.cpan.org/Public/Dist/Display.html?Name=Time-Activated>
 (or L<bug-Time-Activated@rt.cpan.org|mailto:bug-Time-Activated@rt.cpan.org>).
 
-=head1 AUTHORS
+=head1 AUTHOR
 
 =over 4
 
