@@ -19,47 +19,47 @@ Time::Activated - Syntactic sugar over time activated code supporting DateTime a
 
 =head1 VERSION
 
-Version 0.12
+Version 1.00
 
 =cut
 
-our $VERSION = 0.12;
+our $VERSION = 1.00;
 
 =head1 SYNOPSIS
 
 	use Time::Activated;
 
 	# simple statements
-	time_activated after '1985-01-01T00:00:00' => execute { print "New feature beginning Jan 1st 1985!" };
-	time_activated before '1986-12-31T00:00:00' => execute { print "This feature ends by 1986!" };
-	time_activated before '2000' => execute { print "Let's dance like its 1999!" };
+	time_activated after_moment '1985-01-01T00:00:00' => execute_logic { print "New feature beginning Jan 1st 1985!" };
+	time_activated before_moment '1986-12-31T00:00:00' => execute_logic { print "This feature ends by 1986!" };
+	time_activated before_moment '2000' => execute_logic { print "Let's dance like its 1999!" };
 	time_activated
-		between '2016-01-01T00:00:00' => '2016-12-31T23:59:59' =>
-		execute { print "Business logic exception for 2016!" };
+		between_moments '2016-01-01T00:00:00' => '2016-12-31T23:59:59' =>
+		execute_logic { print "Business logic exception for 2016!" };
 
 	# combined statements a la try {} catch {} by Try::Tiny (tm)
 	time_activated
-		after '1985-01T00:00:00-03:00' => execute { print "New business logic!" }, # <-- Gotcha! it is a ,
-		before '1986-12-31T00:00:00-03:00' => execute { print "Old business logic!" };
+		after_moment '1985-01T00:00:00-03:00' => execute_logic { print "New business logic!" }, # <-- Gotcha! it is a ,
+		before_moment '1986-12-31T00:00:00-03:00' => execute_logic { print "Old business logic!" };
 
 	# elements get evaluated in order
 	time_activated
-		before '1986-12-31T00:00:00-03:00' => execute { print "Old business logic!" }, # <-- Switch that ;
-		after '1985-01-01T00:00:00-03:00' => execute { print "New business logic!" }; # <-- Switch that ,
+		before_moment '1986-12-31T00:00:00-03:00' => execute_logic { print "Old business logic!" }, # <-- Switch that ;
+		after_moment '1985-01-01T00:00:00-03:00' => execute_logic { print "New business logic!" }; # <-- Switch that ,
 
 	# overlapping allowed, all matching items get executed
 	time_activated
-		after '2018', execute { print "This is from 2018-01-01 and on." },
-		after '2018-06-01', execute { print "This is from 2018-06-01 and on. On top of the previuos." };
+		after_moment '2018', execute_logic { print "This is from 2018-01-01 and on." },
+		after_moment '2018-06-01', execute_logic { print "This is from 2018-06-01 and on. On top of the previuos." };
 
 	# Alternate syntax
 	time_activated
-		after '2018', execute { print "Welcome to new business process for 2018!" }, #=> is a ,
-		after '2019', execute { print "This is added on top of 2018 processes for 2019!" };
+		after_moment '2018', execute_logic { print "Welcome to new business process for 2018!" }, #=> is a ,
+		after_moment '2019', execute_logic { print "This is added on top of 2018 processes for 2019!" };
 
 	# DateTime objects can be used to define points in time
 	my $dt = DateTime->new(year=>2018, month=>10, day=>16);
-	time_activated after $dt => execute { print "This happens after 2018-10-16!" };
+	time_activated after_moment $dt => execute_logic { print "This happens after 2018-10-16!" };
 
 =head1 DESCRIPTION
 
@@ -76,7 +76,7 @@ programmed web service changes in endpoints/contracts or other time related even
 =cut
 
 use Exporter 5.57 'import';
-our @EXPORT = our @EXPORT_OK = qw(time_activated before after between execute);
+our @EXPORT = our @EXPORT_OK = qw(time_activated before_moment after_moment between_moments execute_logic);
 
 =head1 EXPORTS
 
@@ -93,10 +93,10 @@ time_activated "CONDITION" "WHEN" "WHAT"
 
 =head2 "CONDITION"
 
-Can be any of C<after>, C<before>, C<between>.
-C<after>, accepts a parameters representing a point in time B<at and after> which the execute statement will be executed.
-C<before>, accepts a parameters representing a point in time B<before, but not including>, which the execute statement will be executed.
-C<between>, accepts two parameters representing a range in time B<between, both limits included>, which the execute statement will be executed.
+Can be any of C<after_moment>, C<before_moment>, C<between_moments>.
+C<after_moment>, accepts a parameters representing a point in time B<at and after> which the execute_logic statement will be executed.
+C<before_moment>, accepts a parameters representing a point in time B<before, but not including>, which the execute_logic statement will be executed.
+C<between_moments>, accepts two parameters representing a range in time B<between, both limits included>, which the execute_logic statement will be executed.
 
 =head2 "WHEN"
 
@@ -107,16 +107,16 @@ Expansion is supported so '2000', '2000-01', '2000-01-01' and '2000-01-01T00:00'
 Timezones are supported and honored. Thus:
 
     time_activated
-		after '1999-12-31T23:00:00-01:00' => execute { print('Matches from 2000-01-01T00:00:00 GMT!') },
-		after '2000-01-01T00:00:00+01:00' => execute { print('Matches from 1999-01-01T23:00:00 GMT!') };
+		after_moment '1999-12-31T23:00:00-01:00' => execute_logic { print('Matches from 2000-01-01T00:00:00 GMT!') },
+		after_moment '2000-01-01T00:00:00+01:00' => execute_logic { print('Matches from 1999-01-01T23:00:00 GMT!') };
 
 C<after> includes the exact time which is used as parameter, C<before> does not.
 Thus using C<after> and C<before> with the same time parameter ensures that only one statement gets executed.
 i.e.:
 
 	time_activated
-		before 	SOME_DATE => execute { print "Before!" },
-		after 	SOME_DATE => execute { print "After!" };
+		before_moment 	SOME_DATE => execute { print "Before!" },
+		after_moment 	SOME_DATE => execute { print "After!" };
 
 
 =head2 "WHAT"
@@ -125,12 +125,12 @@ Is either an anonymous code block or a reference to subroutine
 Code that will be executed on a given conditions in many ways:
 
 	time_activated
-		after '2001' => execute \&my_great_new_feature; #No parameters can be passed with references...
+		after_moment '2001' => execute_logic \&my_great_new_feature; #No parameters can be passed with references...
 
 	time_activated
-		after '2000' => execute { print 'Y2K ready!' },
-		after '2001' => execute (\&my_great_new_feature), #References with multilines need ()
-		after '2002' => execute { &my_great_new_feature("We need parameters by 2002")};
+		after_moment '2000' => execute_logic { print 'Y2K ready!' },
+		after_moment '2001' => execute_logic (\&my_great_new_feature), #References with multilines need ()
+		after_moment '2002' => execute_logic { &my_great_new_feature("We need parameters by 2002")};
 
 =head2 CONSTANTS
 
@@ -138,7 +138,7 @@ It is cool to use constants documenting both time and intent.
 
 	use constants PROCESS_X_CUTOVER_DATE => '2017-01-01T00:00:00';
 
-	time_activated after PROCESS_X_CUTOVER_DATE => execute { &new_business_process($some_state) };
+	time_activated after_moment PROCESS_X_CUTOVER_DATE => execute_logic { &new_business_process($some_state) };
 
 =cut
 
@@ -151,10 +151,10 @@ L<Test::MockTime|Test::MockTime> is your friend.
 	use Test::MockTime;
 
 	Test::MockTime::set_absolute_time('1986-05-27T00:00:00Z');
-	time_activated after '1985-01-01T00:00:00-03:00' => execute { pass('Basic after') }; # this gets executed
+	time_activated after_moment '1985-01-01T00:00:00-03:00' => execute_logic { pass('Basic after') }; # this gets executed
 
 	Test::MockTime::set_absolute_time('1984-05-27T00:00:00Z');
-	time_activated after '1985-01-01T00:00:00-03:00' => execute { fail('Basic after') }; # this does not get executed
+	time_activated after_moment '1985-01-01T00:00:00-03:00' => execute_logic { fail('Basic after') }; # this does not get executed
 
 =cut
 
@@ -174,17 +174,17 @@ C<time_activated> is both the syntactical placeholder for grammar in C<Time::Act
 Syntactically the structure is like so (note the ','s and ';'):
 
 	time_activated
-		after ..., execute ...,
-		before ..., execute ...,
-		between ..., ... execute ...;
+		after_moment ..., execute_logic ...,
+		before_moment ..., execute_logic ...,
+		between_moments ..., ... execute_logic ...;
 
 Alternatively some can be changed for a => for a fancy syntax. This abuses anonymous hashes, some inteligent selections of prototypes (stolen from L<Try::Tiny|Try::Tiny>) and probably
 other clever perl-ish syntactical elements that escape my understanding. Note '=>'s, ','s and ';':
 
 	time_activated
-		after ... => execute ...,
-		before ... => execute ...,
-		between ... => ... => execute ...; #Given. This does not look so fancy but more into the weird side...
+		after_moment ... => execute_logic ...,
+		before_moment ... => execute_logic ...,
+		between_moments ... => ... => execute_logic ...; #Given. This does not look so fancy but more into the weird side...
 
 =cut
 
@@ -226,93 +226,93 @@ sub time_activated (@) {
 	return $activations;
 }
 
-=head2 before
+=head2 before_moment
 
-C<before> defines a point in time before B<not including the exact point in time> which code is executed.
+C<before_moment> defines a point in time before B<not including the exact point in time> which code is executed.
 
 This does not happen before January 1st 2018 at 00:00 but does happen from that exact point in time and on.
 
 	time_activated
-		before '2018', execute { print "We are awaiting for 1/1/2018..." };
+		before_moment '2018', execute_logic { print "We are awaiting for 1/1/2018..." };
 
 Another fancy way to say do not do that before January 1st 2018 at 00:00.
 
 	ime_activated
-		before '2018' => execute { print "We are awaiting for 1/1/2018..." };
+		before_moment '2018' => execute_logic { print "We are awaiting for 1/1/2018..." };
 
 A fancy way to combine before statements.
 
 	time_activated
-		before '2018' => execute { print "We are awaiting for 1/1/2018..." },
-		before '2019' => execute { print "Not quite there for 1/1/2019..." };
+		before_moment '2018' => execute_logic { print "We are awaiting for 1/1/2018..." },
+		before_moment '2019' => execute_logic { print "Not quite there for 1/1/2019..." };
 
 =cut
 
-sub before ($$;@) {
+sub before_moment ($$;@) {
     my ( $before, $block, @rest ) = @_;
 
-    croak 'Useless bare before()' unless wantarray;
+    croak 'Useless bare before_moment()' unless wantarray;
 
     my $caller = caller;
-    subname("${caller}::before {...} " => $block);
+    subname("${caller}::before_moment{...} " => $block);
 
     return (bless({before => _spawn_dt($before), code => $block},'Time::Activated::Before'), @rest);
 }
 
-=head2 after
+=head2 after_moment
 
-C<after> defines a point in time after B<including the exact point in time> which code is executed.
+C<after_moment> defines a point in time after B<including the exact point in time> which code is executed.
 
 	time_activated
-		after '2018' => execute { print "Wea are either at 1/1/2018 or after it..." };
+		after_moment '2018' => execute { print "Wea are either at 1/1/2018 or after it..." };
 
-As with C<before> statements can be combined with C<before>, C<after> and C<between> with no limit.
+As with C<before_moment> statements can be combined with C<before_moment>, C<after_moment> and C<between_moments> with no limit.
 
 =cut
 
-sub after ($$;@) {
+sub after_moment ($$;@) {
     my ( $after, $block, @rest ) = @_;
 
-    croak 'Useless bare after()' unless wantarray;
+    croak 'Useless bare after_moment()' unless wantarray;
 
     my $caller = caller;
-    subname("${caller}::after {...} " => $block);
+    subname("${caller}::after _moment{...} " => $block);
 
     return (bless({after => _spawn_dt($after), code => $block},'Time::Activated::After'), @rest);
 }
 
-=head2 between
+=head2 between_moments
 
-C<between> defines two points in time between which code is executes B<including both exact points in time>.
+C<between_moments> defines two points in time between which code is executes B<including both exact points in time>.
 
 	time_activated
-		between '2018' => '2018-12-31T23:59:59' => execute { print "This is 2018..." };
+		between_moment '2018' => '2018-12-31T23:59:59' => execute_logic { print "This is 2018..." };
 
-As with C<before> statements can be combined with C<before>, C<after> and C<between> with no limit.
+As with C<before_moments> statements can be combined with C<before_moment>, C<after_moment> and C<between_moment> with no limit.
 
 =cut
 
-sub between ($$$;@) {
+sub between_moments ($$$;@) {
     my ( $after, $before, $block, @rest ) = @_;
 
-    croak 'Useless bare between()' unless wantarray;
+    croak 'Useless bare between_moments()' unless wantarray;
 
     my $caller = caller;
-    subname("${caller}::between {...} " => $block);
+    subname("${caller}::between_moments{...} " => $block);
 
     return (bless({before => _spawn_dt($before), after => _spawn_dt($after), code => $block},'Time::Activated::Between'), @rest);
 }
 
-=head2 execute
+=head2 execute_logic
 
 Exists for the sole reason of verbosity.
 Accepts a single parameters that must be a subroutine or anonymous code block.
-i
-	execute { print "This is a verbose way of saying that this will be executed!" };
+
+	execute_logic { print "This is a verbose way of saying that this will be executed!" };
 
 =cut
 
-sub execute(&) {
+sub execute_logic(&) {
 	my ($code) = @_;
     return $code;
 }
@@ -348,22 +348,22 @@ __END__
 
 (F) time_activated() encountered an unexpected argument...
 
-time_activated is not followed by either after, before or between
+time_activated is not followed by either after_moment, before_moment or between_moments
 
 	time_activated wierd_sub(); #<- Plain weird but it could somehow happen
 
-=item after before between
+=item after_moment before_moment between_moments
 
-(F)	Useless bare after()
-(F)	Useless bare before()
-(F)	Useless bare between()
+(F)	Useless bare after_moment()
+(F)	Useless bare before_moment()
+(F)	Useless bare between_moments()
 
 Use of xxxxx() with no time_activated before it.
 Generally the result of a ; instead of a ,.
 
 	time_activated
-		after '2018' {};
-		before '2018' {}; #<- This one triggers a 'Useless bare before()' since it is not part of the time_activated call
+		after_moment '2018' {}; #<- mind the ;
+		before_moment '2018' {}; #<- This one triggers a 'Useless bare before()' since it is not part of the time_activated call
 
 =head1 BUGS AND LIMITATIONS
 
@@ -371,8 +371,8 @@ No known bugs, but you cannot have this syntax.
 Some , and/or => required:
 
 	time_activated
-		before '2016-09-24' {}
-		after '2016-10-24' {};
+		before_moment '2016-09-24' {}
+		after_moment '2016-10-24' {};
 
 =head1 DEPENDENCIES
 
@@ -380,7 +380,8 @@ L<DateTime|DateTime>, L<DateTime::Format::ISO8601|DateTime::Format::ISO8601>, L<
 
 =head1 INCOMPATIBILITIES
 
-None I know.
+Versions prior to 1.00 have collission with Moose.
+Naturally, Moose wins and compatibility breaks from 0.12 to 1.00.
 
 =head1 SEE ALSO
 
